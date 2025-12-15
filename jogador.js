@@ -1,158 +1,152 @@
-// === LÓGICA DO MODO JOGADOR (RPG) ===
+// === MÓDULO JOGADOR: LÓGICA DA CARREIRA (v17.0) ===
 
 const PlayerMode = {
-    // Estado específico do Jogador
-    data: {
-        skills: { attack: 60, defense: 40, physical: 60 },
-        relationships: { coach: 50, team: 50, fans: 10 }, // 0 a 100
-        lifestyle: [], // Itens comprados
-        fame: 0
-    },
-
-    // Inicializa a interface do Jogador
+    // Inicializa a interface do Jogador (Aba 'Carreira' e 'Treino')
     init: () => {
-        const content = document.getElementById('main-content');
-        content.innerHTML = PlayerMode.renderDashboard();
-        PlayerMode.updateUI();
+        const playerContent = document.getElementById('main-content');
+        playerContent.innerHTML = PlayerMode.renderPlayerHub();
     },
 
-    renderDashboard: () => {
-        const p = state.team.squad.find(x => x.isMe);
+    // Renderiza a aba principal (Carreira/Stats)
+    renderPlayerHub: () => {
+        const p = state.player;
+        
         return `
-            <div class="player-dashboard">
-                <div class="profile-card">
-                    <div class="profile-pic-area">
-                        <img src="https://ui-avatars.com/api/?name=${p.name}&background=random" alt="Player">
-                        <div class="ovr-badge">${p.ovr}</div>
-                    </div>
-                    <div class="profile-stats">
-                        <h2>${p.name}</h2>
-                        <p>${p.pos} | ${state.team.name}</p>
-                        <div style="margin-top:5px; font-size:0.9rem; color:#4ade80">
-                            Salário: ${Utils.formatMoney(5000)}/sem
+            <div class="player-hub">
+                <div class="card player-summary highlight">
+                    <div class="stats-player-header">
+                        <div class="pos-badge ${p.pos}">${p.pos}</div>
+                        <div>
+                            <h3 style="margin:0">${p.name}</h3>
+                            <p style="margin:0; font-size:0.9rem; color:var(--text-muted)">Idade: ${p.age}</p>
                         </div>
+                        <div class="stats-ovr">${p.ovr}</div>
+                    </div>
+                    
+                    <h4 style="margin-top:10px; color:var(--accent)">Estatísticas da Temporada</h4>
+                    <div class="stats-table">
+                        <table>
+                            <tr><td>Gols</td><td>${p.stats.goals}</td></tr>
+                            <tr><td>Assistências</td><td>${p.stats.assists}</td></tr>
+                            <tr><td>Valor de Mercado</td><td>${Utils.formatMoney(p.val)}</td></tr>
+                        </table>
                     </div>
                 </div>
 
-                <div class="relationship-box">
-                    <div class="rel-item">
-                        <div class="rel-label"><span>Treinador (Titularidade)</span> <span>${PlayerMode.data.relationships.coach}%</span></div>
-                        <div class="progress-track"><div class="progress-fill fill-coach" style="width:${PlayerMode.data.relationships.coach}%"></div></div>
-                    </div>
-                    <div class="rel-item">
-                        <div class="rel-label"><span>Elenco (Entrosamento)</span> <span>${PlayerMode.data.relationships.team}%</span></div>
-                        <div class="progress-track"><div class="progress-fill fill-team" style="width:${PlayerMode.data.relationships.team}%"></div></div>
-                    </div>
-                    <div class="rel-item">
-                        <div class="rel-label"><span>Torcida (Fama)</span> <span>${PlayerMode.data.relationships.fans}%</span></div>
-                        <div class="progress-track"><div class="progress-fill fill-fans" style="width:${PlayerMode.data.relationships.fans}%"></div></div>
-                    </div>
-                </div>
+                ${PlayerMode.renderTrainingPanel()}
 
-                <h3 style="margin: 10px 0 5px 0; font-size:1rem; color:#aaa">Centro de Treinamento</h3>
-                <div class="action-grid">
-                    <div class="action-card" onclick="PlayerMode.train('attack')">
-                        <span class="action-icon">⚽</span>
-                        <div>Finalização</div>
-                        <div class="action-cost">-15 Energia</div>
-                    </div>
-                    <div class="action-card" onclick="PlayerMode.train('physical')">
-                        <span class="action-icon">💪</span>
-                        <div>Academia</div>
-                        <div class="action-cost">-20 Energia</div>
-                    </div>
-                    <div class="action-card" onclick="PlayerMode.interact('coach')">
-                        <span class="action-icon">🤝</span>
-                        <div>Falar c/ Chefe</div>
-                        <div class="action-cost">-10 Energia</div>
-                    </div>
-                    <div class="action-card" onclick="PlayerMode.interact('social')">
-                        <span class="action-icon">📱</span>
-                        <div>Redes Sociais</div>
-                        <div class="action-cost">-5 Energia</div>
-                    </div>
-                </div>
-
-                <h3 style="margin: 20px 0 5px 0; font-size:1rem; color:#aaa">Estilo de Vida</h3>
-                <div id="lifestyle-list">
-                    ${PlayerMode.renderLifestyleItems()}
+                <div class="card" style="text-align:center">
+                    <h4 style="margin:0">Reputação e Agente</h4>
+                    <p style="font-size:0.9rem; color:var(--text-muted)">Seu agente está trabalhando em propostas...</p>
+                    <button class="btn-full primary" onclick="PlayerMode.checkProposals()">
+                        VER PROPOSTAS (Futuro)
+                    </button>
                 </div>
             </div>
         `;
     },
 
-    renderLifestyleItems: () => {
-        const items = [
-            { id: 'shoe', name: "Chuteira Elite", price: 20000, benefit: "+2 Finalização" },
-            { id: 'watch', name: "Relógio de Ouro", price: 50000, benefit: "+5 Fama" },
-            { id: 'car', name: "Carro Esportivo", price: 150000, benefit: "Recupera Energia" }
-        ];
+    // Renderiza o painel de treino
+    renderTrainingPanel: () => {
+        const p = state.player;
+        const availableFocus = DB.attributes.filter(attr => p.pos.includes(attr.pos[0]) || p.pos.includes(attr.pos[1]) || attr.pos.length === 0);
+        const currentFocus = state.trainingFocus || availableFocus[0].id;
+        const energyRequired = 5; // Custo de energia por treino
 
-        return items.map(item => {
-            const owned = PlayerMode.data.lifestyle.includes(item.id);
-            const btn = owned 
-                ? `<span style="color:#22c55e; font-size:0.8rem">COMPRADO</span>` 
-                : `<button class="btn-small" onclick="PlayerMode.buyItem('${item.id}', ${item.price})">${Utils.formatMoney(item.price)}</button>`;
-            
-            return `
-                <div class="lifestyle-item ${owned ? 'owned' : ''}">
-                    <div>
-                        <div style="font-weight:bold">${item.name}</div>
-                        <div style="font-size:0.7rem; color:#888">${item.benefit}</div>
-                    </div>
-                    ${btn}
+        return `
+            <h3 style="margin: 20px 0 10px 0; font-size:1.1rem; color:var(--text-muted)">FOCO DE TREINO (CUSTO: ${energyRequired} ENERGIA)</h3>
+            <div class="card training-focus-card">
+                <p>Selecione um atributo para focar. O OVR e o valor de mercado aumentam conforme o treino.</p>
+                <div class="training-grid">
+                    ${availableFocus.map(attr => `
+                        <div class="training-option ${currentFocus === attr.id ? 'active' : ''}" onclick="PlayerMode.setTrainingFocus('${attr.id}')">
+                            <span class="material-icons training-icon">${PlayerMode.getAttrIcon(attr.id)}</span>
+                            ${attr.name}<br>(${p.attrs[attr.id]})
+                        </div>
+                    `).join('')}
                 </div>
-            `;
-        }).join('');
+                <button class="btn-full primary" style="margin-top:15px;" onclick="PlayerMode.train()">
+                    TREINAR AGORA
+                </button>
+            </div>
+        `;
     },
 
-    // AÇÕES
-    train: (type) => {
-        if(state.energy < 20) return ui.notify("Muito cansado para treinar!", "error");
-        
-        state.energy -= 20;
-        const me = state.team.squad.find(x => x.isMe);
-        
-        // Evolução baseada no tipo
-        if(Math.random() > 0.4) {
-            me.ovr += 1;
-            PlayerMode.data.relationships.coach += 2; // Treinador gosta de esforço
-            ui.notify(`Evoluiu! OVR ${me.ovr}`, "success");
-        } else {
-            ui.notify("Treino bom, mas sem evolução.", "info");
-        }
-        
-        PlayerMode.init(); // Re-renderiza
-    },
-
-    interact: (target) => {
-        if(state.energy < 10) return ui.notify("Sem energia.", "error");
-        state.energy -= 10;
-
-        if(target === 'coach') {
-            PlayerMode.data.relationships.coach += 5;
-            ui.notify("Conversa produtiva com o Mister.", "success");
-        } else if (target === 'social') {
-            PlayerMode.data.relationships.fans += 3;
-            ui.notify("Postou foto no Instagram (+Fama)", "success");
-        }
+    // Define o foco de treino
+    setTrainingFocus: (attrId) => {
+        state.trainingFocus = attrId;
         PlayerMode.init();
     },
 
-    buyItem: (id, price) => {
-        // No modo jogador, state.cash é o dinheiro PESSOAL
-        if(state.cash >= price) {
-            state.cash -= price;
-            PlayerMode.data.lifestyle.push(id);
-            ui.notify("Item comprado! Vida de luxo.", "success");
-            
-            // Aplica bônus imediato (simplificado)
-            if(id === 'shoe') state.team.squad.find(x=>x.isMe).ovr += 2;
-            if(id === 'watch') PlayerMode.data.relationships.fans += 10;
-            
-            PlayerMode.init();
+    // Lógica do treino e crescimento do jogador
+    train: () => {
+        const energyRequired = 5;
+        if (state.energy < energyRequired) {
+            return ui.notify("Energia insuficiente. Descanse um dia ou jogue uma partida.", "error");
+        }
+
+        const focusAttrId = state.trainingFocus;
+        if (!focusAttrId) return ui.notify("Selecione um foco de treino primeiro.", "error");
+
+        const p = state.player;
+        const attrDef = DB.attributes.find(a => a.id === focusAttrId);
+        
+        let growth = attrDef.growth * 100; // Taxa base (ex: 15 para Finalização)
+
+        // Aplica fator de aleatoriedade no crescimento
+        const randomFactor = 1 + (Math.random() - 0.5) * 0.1; // +/- 5%
+        growth = Math.round(growth * randomFactor);
+
+        // Crescimento de atributo (sempre cresce pelo menos 1, mas o foco é mais forte)
+        p.attrs[focusAttrId] += Math.max(1, growth);
+        
+        // Atualiza o OVR e valor de mercado com base no novo atributo
+        PlayerMode.updateOVR(p);
+        p.val = p.ovr * 2500000; // Recalcula valor
+
+        state.energy -= energyRequired;
+        
+        ui.notify(`Treino concluído! ${attrDef.name} subiu ${Math.max(1, growth)} pontos. OVR: ${p.ovr}.`, "success");
+        PlayerMode.init();
+        SaveSystem.save();
+    },
+
+    // Função para atualizar o OVR do jogador com base em seus atributos
+    updateOVR: (player) => {
+        const attrs = player.attrs;
+
+        let ovrCalc = 0;
+        // OVR é a média ponderada de 4 atributos principais (como no database_Jo.js)
+        if (player.pos === 'ATT') ovrCalc = (attrs.finishing * 3 + attrs.speed * 2 + attrs.passing + attrs.stamina) / 7;
+        else if (player.pos === 'MID') ovrCalc = (attrs.passing * 3 + attrs.stamina * 2 + attrs.tackling * 1.5 + attrs.speed) / 7.5;
+        else if (player.pos === 'DEF') ovrCalc = (attrs.tackling * 3 + attrs.passing * 2 + attrs.stamina + attrs.finishing) / 7;
+        else if (player.pos === 'GK') ovrCalc = (attrs.handling * 4 + attrs.tackling * 2 + attrs.speed) / 7;
+        
+        player.ovr = Math.round(ovrCalc);
+    },
+
+    // Simulação de Propostas de Transferência (Apenas Notificação por enquanto)
+    checkProposals: () => {
+        const p = state.player;
+        if (p.ovr >= 85) {
+            ui.notify("Seu agente conseguiu propostas da Liga dos Campeões! Negocie sua transferência no próximo mês.", "info");
+        } else if (p.ovr >= 75) {
+            ui.notify("Boas propostas de clubes estrangeiros. Continue se destacando!", "info");
         } else {
-            ui.notify("Sem dinheiro na conta pessoal.", "error");
+            ui.notify("Sem propostas significativas no momento. Foco no treino e na partida.", "info");
+        }
+    },
+
+    // Função auxiliar para ícones
+    getAttrIcon: (attrId) => {
+        switch(attrId) {
+            case 'finishing': return 'sports_soccer';
+            case 'passing': return 'send';
+            case 'tackling': return 'security';
+            case 'speed': return 'directions_run';
+            case 'stamina': return 'heart_plus';
+            case 'handling': return 'sports_handball';
+            default: return 'star';
         }
     }
 };

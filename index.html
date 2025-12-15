@@ -3,8 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>World Pro: Universe</title>
+    <title>World Pro: Universe - V17.0</title>
     
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="manager.css">
     <link rel="stylesheet" href="jogador.css">
@@ -19,8 +23,8 @@
     <section id="screen-menu" class="screen active">
         <div class="menu-content">
             <div class="logo-area">
-                <h1 class="game-title">WORLD PRO<br><span class="highlight">UNIVERSE</span></h1>
-                <p class="subtitle">Manager & Career Simulation</p>
+                <h1 class="game-title">WORLD PRO<br><span class="highlight">QUÂNTICO</span></h1>
+                <p class="subtitle">Simulação Definitiva v17.0</p>
             </div>
             
             <div class="menu-buttons">
@@ -32,12 +36,12 @@
                     <span class="material-icons">add_circle</span> NOVA CARREIRA
                 </button>
                 
-                <button class="btn-text" onclick="alert('v15.0 - Sistema Modular Implementado')">
-                    <span class="material-icons">info</span> Sobre
+                <button id="btn-settings" class="btn-text">
+                    <span class="material-icons">settings</span> Configurações
                 </button>
             </div>
             
-            <div class="footer-version">v15.0 | Modular Engine</div>
+            <div class="footer-version">v17.0 | Quantum Leap Engine</div>
         </div>
     </section>
 
@@ -49,14 +53,22 @@
 
         <div class="form-container">
             <div class="input-box">
-                <label>Nome do Treinador/Jogador</label>
-                <input type="text" id="input-name" placeholder="Ex: José Mourinho">
+                <label>Seu Nome</label>
+                <input type="text" id="input-name" placeholder="Ex: Julian Nagelsmann">
             </div>
-
             <div class="input-box">
                 <label>País da Liga Inicial</label>
                 <select id="input-nation">
                     <option value="" disabled selected>A carregar países...</option>
+                </select>
+            </div>
+            
+            <div class="input-box">
+                <label>Moeda Principal</label>
+                <select id="input-currency">
+                    <option value="EUR">Euro (€)</option>
+                    <option value="BRL">Real (R$)</option>
+                    <option value="USD">Dólar ($)</option>
                 </select>
             </div>
 
@@ -73,7 +85,7 @@
             </div>
 
             <div id="pos-group" class="input-box hidden">
-                <label>A tua Posição</label>
+                <label>A sua Posição</label>
                 <select id="input-pos">
                     <option value="ATT">Avançado (Goleador)</option>
                     <option value="MID">Médio (Criativo)</option>
@@ -100,14 +112,14 @@
                     <span class="material-icons">bolt</span> <span id="ui-energy">100</span>%
                 </div>
                 <div class="resource-pill cash">
-                    € <span id="ui-cash">0</span>
+                    <span id="ui-currency-symbol">€</span> <span id="ui-cash">0</span>
                 </div>
             </div>
         </header>
 
         <div class="news-ticker">
             <span class="material-icons">campaign</span>
-            <div class="ticker-text" id="ui-news">Bem-vindo ao World Pro Universe! A temporada vai começar.</div>
+            <div class="ticker-text" id="ui-news">O sistema PWA foi instalado com sucesso.</div>
         </div>
 
         <main id="main-content" class="scroll-content">
@@ -126,13 +138,18 @@
                 <span class="material-icons">groups</span>
                 <span class="nav-label">Elenco</span>
             </button>
-            <button class="nav-btn" data-tab="market">
-                <span class="material-icons">transfer_within_a_station</span>
-                <span class="nav-label">Mercado</span>
+            <button class="nav-btn" data-tab="training">
+                <span class="material-icons">fitness_center</span>
+                <span class="nav-label">Treino</span>
+            </button>
+            <button class="nav-btn" data-tab="transfer">
+                <span class="material-icons">compare_arrows</span>
+                <span class="nav-label">Transfer</span>
             </button>
             <button class="nav-btn" data-tab="club">
                 <span class="material-icons">domain</span>
-                <span class="nav-label">Clube</span> </button>
+                <span class="nav-label">Clube</span>
+            </button>
             <button class="nav-btn" data-tab="league">
                 <span class="material-icons">emoji_events</span>
                 <span class="nav-label">Liga</span>
@@ -176,13 +193,35 @@
     <div id="modal-tactics" class="modal-overlay hidden">
         <div class="modal-box">
             <div class="modal-header">
-                <h3>ESTRATÉGIA</h3>
-                <button class="btn-close-modal"><span class="material-icons">close</span></button>
+                <h3>ESTRATÉGIA DE JOGO</h3>
+                <button class="btn-close-modal" onclick="ui.hideModal('modal-tactics')"><span class="material-icons">close</span></button>
             </div>
             <div class="modal-body" id="tactics-list"></div>
         </div>
     </div>
-
+    
+    <div id="modal-negotiation" class="modal-overlay hidden">
+        <div class="modal-box large">
+            <div class="modal-header">
+                <h3 id="neg-title">Negociação</h3>
+                <button class="btn-close-modal" onclick="ui.hideModal('modal-negotiation')"><span class="material-icons">close</span></button>
+            </div>
+            <div class="modal-body" id="neg-content">
+                </div>
+        </div>
+    </div>
+    
+    <div id="modal-player-stats" class="modal-overlay hidden">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3 id="stats-title">Estatísticas</h3>
+                <button class="btn-close-modal" onclick="ui.hideModal('modal-player-stats')"><span class="material-icons">close</span></button>
+            </div>
+            <div class="modal-body" id="stats-content">
+                </div>
+        </div>
+    </div>
+    
     <div id="modal-event" class="modal-overlay hidden">
         <div class="modal-box event-style">
             <div class="event-icon-area">
@@ -194,7 +233,36 @@
         </div>
     </div>
 
+    <div id="modal-settings" class="modal-overlay hidden">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3>CONFIGURAÇÕES</h3>
+                <button class="btn-close-modal" onclick="ui.hideModal('modal-settings')"><span class="material-icons">close</span></button>
+            </div>
+            <button id="action-save" class="btn-full primary">GUARDAR JOGO</button>
+            <button id="action-currency" class="btn-full secondary">MUDAR MOEDA (€)</button>
+            <button id="action-quit" class="btn-full danger">SAIR PARA O MENU</button>
+        </div>
+    </div>
+
+
 </div>
 
-<script src="database_Jo.js"></script> <script src="database.js"></script>    <script src="manager.js"></script>     <script src="jogador.js"></script>     <script src="game.js"></script>        </body>
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('service-worker.js')
+                .then(reg => console.log('SW Registrado:', reg.scope))
+                .catch(err => console.error('Falha no registro do SW:', err));
+        });
+    }
+</script>
+
+<script src="database_Jo.js"></script> 
+<script src="database.js"></script>    
+<script src="manager.js"></script>     
+<script src="jogador.js"></script>     
+<script src="game.js"></script>        
+
+</body>
 </html>
