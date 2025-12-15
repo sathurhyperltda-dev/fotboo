@@ -1,6 +1,6 @@
-// === CORE DO JOGO: LÓGICA CENTRAL (v17.0 - Quantum Leap) ===
+// === CORE DO JOGO: LÓGICA CENTRAL (v17.1 - Ultimate Update) ===
 
-// === ESTADO GLOBAL DO JOGO ===
+// === ESTADO GLOBAL DO JOGO (Expandido com novos atributos) ===
 const state = {
     mode: 'manager', 
     name: '',
@@ -8,594 +8,387 @@ const state = {
     countryId: null,
     leagueId: null,
     week: 1,
-    cash: 0, // Caixa do clube ou dinheiro pessoal do jogador
+    cash: 20000000, // Orçamento inicial ajustado para Manager
     energy: 100,
     morale: 80, 
     market: [], 
     news: "World Pro: Universe carregado e pronto para o Salto Quântico!",
     tactics: 'balance', 
-    upgrades: { stadium: 1, training: 1, academy: 1, marketing: 1 }, 
+    // Melhoria: Upgrades de Infraestrutura
+    upgrades: { stadium: 1, training: 1, academy: 1, medical: 1, marketing: 1 }, 
     myScore: 6.0, 
     history: [],
     currentRival: null,
-    currency: 'EUR', // Moeda inicial
-    // Referência direta ao jogador da carreira
-    player: null 
+    currency: 'EUR', 
+    player: null,
+    // Novo: Estatísticas da Liga
+    leagueStandings: [],
+    lastMatchResult: null,
+    staffs: null, // Será inicializado no manager.js
 };
 
 // === SISTEMA DE SAVE (LOCAL STORAGE) ===
 const SaveSystem = {
     save: () => {
-        // Usa o ID único e a moeda para garantir que o PlayerMode.data seja salvo corretamente
         const player = state.team ? state.team.squad.find(p => p.isMe) : null;
-        if(player) state.player = player; // Atualiza a referência do jogador no state
+        if(player) state.player = player;
 
         const data = { 
             state: state, 
             playerData: (typeof PlayerMode !== 'undefined' && PlayerMode.data) ? PlayerMode.data : null,
             savedAt: new Date().getTime() 
         };
-        localStorage.setItem('WPU_Save_v17', JSON.stringify(data));
+        localStorage.setItem('worldProSave', JSON.stringify(data));
         ui.notify("Jogo guardado com sucesso!", "success");
     },
     load: () => {
-        const raw = localStorage.getItem('WPU_Save_v17');
-        if (!raw) return ui.notify("Nenhum save encontrado.", "error");
-        
-        const data = JSON.parse(raw);
-        Object.assign(state, data.state);
-        
-        // Restaura dados do modo Jogador se existirem
-        if (data.playerData && typeof PlayerMode !== 'undefined') {
-            Object.assign(PlayerMode.data, data.playerData);
-        }
-        
-        // Reconstrói referências
-        const country = DB.countries.find(c => c.id === state.countryId);
-        if (country) {
-            const league = country.leagues.find(l => l.id === state.leagueId);
-            if (league) {
-                state.team = league.clubs.find(c => c.name === state.team.name);
-                // Reconecta a referência do jogador da carreira dentro do squad carregado
-                state.player = state.team.squad.find(p => p.isMe) || null;
-            }
-        }
-        
-        ui.show('screen-hub');
-        ui.updateAll();
-        Utils.pickNextRival();
-    },
-    hasSave: () => localStorage.getItem('WPU_Save_v17') !== null
-};
-
-// === INICIALIZAÇÃO ===
-document.addEventListener('DOMContentLoaded', () => {
-    if (typeof DB === 'undefined') return alert("ERRO CRÍTICO: database.js não carregado.");
-    
-    // Verifica Save
-    if (SaveSystem.hasSave()) document.getElementById('btn-continue').classList.remove('hidden');
-
-    // Popula Países
-    const selNation = document.getElementById('input-nation');
-    DB.countries.sort((a,b) => a.name.localeCompare(b.name)).forEach(c => {
-        const opt = document.createElement('option');
-        opt.value = c.id;
-        opt.innerText = c.name;
-        selNation.appendChild(opt);
-    });
-
-    // Popula Moedas na Criação
-    const selCurrency = document.getElementById('input-currency');
-    if (selCurrency) {
-        selCurrency.innerHTML = '';
-        ['EUR', 'BRL', 'USD', 'GBP'].forEach(code => {
-            const opt = document.createElement('option');
-            opt.value = code;
-            opt.innerText = `${code} (${Utils.getCurrencySymbol(code)})`;
-            selCurrency.appendChild(opt);
-        });
-        selCurrency.value = 'EUR';
-    }
-
-
-    // === EVENTOS E BINDINGS ===
-    document.getElementById('btn-new-game').onclick = () => ui.show('screen-create');
-    document.getElementById('btn-continue').onclick = SaveSystem.load;
-    document.getElementById('btn-back-menu').onclick = () => ui.show('screen-menu');
-    document.getElementById('btn-start-career').onclick = Game.start;
-    
-    // Botões de Configuração (Modais)
-    document.getElementById('btn-settings').onclick = () => ui.showModal('modal-settings');
-    document.getElementById('action-save').onclick = SaveSystem.save;
-    document.getElementById('action-quit').onclick = () => ui.show('screen-menu');
-    document.getElementById('action-currency').onclick = Utils.toggleCurrency;
-
-    // Lógica de Posição (Manager vs Player)
-    document.querySelectorAll('.mode-btn').forEach(btn => {
-        btn.onclick = (e) => {
-            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-            e.currentTarget.classList.add('active');
-            state.mode = e.currentTarget.dataset.mode;
+        const savedData = localStorage.getItem('worldProSave');
+        if (savedData) {
+            const data = JSON.parse(savedData);
+            Object.assign(state, data.state);
             
-            const posGroup = document.getElementById('pos-group');
-            if (state.mode === 'manager') posGroup.classList.add('hidden');
-            else posGroup.classList.remove('hidden');
-        };
-    });
-
-    document.getElementById('btn-pre-match').onclick = () => {
-        if (state.energy < 15) return ui.notify("Energia insuficiente para jogar!", "error");
-        
-        if (state.mode === 'manager') ui.showTacticsModal();
-        else Match.setup('balance'); 
-    };
-
-    // Navegação Abas
-    document.querySelectorAll('.nav-btn').forEach(btn => {
-        btn.onclick = (e) => {
-            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-            e.currentTarget.classList.add('active');
-            ui.renderTab(e.currentTarget.dataset.tab);
-        };
-    });
-
-    // Match e Modais
-    document.getElementById('btn-finish-match').onclick = Match.finish;
-    document.querySelector('#modal-tactics .btn-close-modal').onclick = () => ui.hideModal('modal-tactics');
-    document.getElementById('btn-event-action').onclick = () => ui.hideModal('modal-event');
-    
-    Utils.pickNextRival();
-});
-
-// === NÚCLEO DO JOGO ===
-const Game = {
-    start: () => {
-        const nameInput = document.getElementById('input-name').value;
-        const nationId = document.getElementById('input-nation').value;
-        const currencyInput = document.getElementById('input-currency').value;
-        
-        if(!nameInput || !nationId) return alert("Por favor preencha todos os dados.");
-
-        state.name = nameInput;
-        state.countryId = nationId;
-        state.currency = currencyInput; // Define a moeda
-        
-        let targetTier = 1; 
-        const country = DB.countries.find(c => c.id === nationId);
-        const leagueData = country.leagues.find(l => l.tier === targetTier) || country.leagues[0];
-        state.leagueId = leagueData.id;
-
-        // Gera Clubes Híbridos (Elencos)
-        leagueData.clubs.forEach(club => {
-            club.pts = 0;
-            club.played = 0;
-            club.squad = Utils.generateSquad(club, nationId);
-        });
-
-        state.team = leagueData.clubs[Math.floor(Math.random() * leagueData.clubs.length)];
-        
-        // Configuração Inicial de Caixa
-        if (state.mode === 'player') {
-            const pos = document.getElementById('input-pos').value;
-            const newPlayer = {
-                id: Utils.generateID(), // ID ÚNICO
-                name: state.name, pos: pos, ovr: 72, val: 0, isMe: true, age: 18,
-                stats: { goals: 0, assists: 0, cards: 0 },
-                attrs: Utils.getInitialPlayerAttributes(pos)
-            };
-            state.team.squad.unshift(newPlayer);
-            state.player = newPlayer; // Define a referência do jogador
-            state.cash = 2000; // Dinheiro Pessoal
-        } else {
-            state.cash = state.team.budget; // Budget do Clube
+            // Re-renderiza a tela principal após carregar
+            ui.showScreen('screen-game'); 
+            ManagerMode.init();
+            return true;
         }
-        
-        // Inicializa a escalação do time
-        if (typeof TransferMode !== 'undefined') {
-            TransferMode.setupInitialLineup();
-        }
-
-        Game.refreshMarket();
-        Utils.pickNextRival();
-        ui.show('screen-hub');
-        ui.updateAll();
-        SaveSystem.save();
-    },
-
-    advanceWeek: () => {
-        state.week++;
-        state.energy = Math.min(100, state.energy + 25);
-        
-        // DÉBITO SEMANAL (Manager)
-        if(state.mode === 'manager' && typeof ManagerMode !== 'undefined') {
-            const wages = ManagerMode.calculateWages();
-            state.cash -= wages; 
-        }
-        
-        // Simulação da Liga
-        const country = DB.countries.find(c => c.id === state.countryId);
-        const league = country.leagues.find(l => l.id === state.leagueId);
-        
-        league.clubs.forEach(club => {
-            if (club !== state.team) {
-                const luck = Math.random() * 100;
-                if (luck + club.power > 130) club.pts += 3;
-                else if (luck + club.power > 100) club.pts += 1;
-                club.played++;
-            }
-        });
-
-        // Ganho Semanal (Modo Jogador)
-        if (state.mode === 'player') {
-            state.cash += 5000; 
-            ui.notify("Recebeste o teu salário semanal.", "info");
-        }
-
-        Utils.pickNextRival();
-        Game.refreshMarket();
-        if(Math.random() < 0.15) Utils.triggerEvent();
-        SaveSystem.save();
-    },
-
-    refreshMarket: () => { 
-        state.market = [];
-        const randomCountry = DB.countries[Math.floor(Math.random() * DB.countries.length)];
-        const names = DB.names[randomCountry.id] || DB.names.en;
-        
-        for (let i = 0; i < 8; i++) {
-            const positions = ['GK', 'DEF', 'MID', 'ATT'];
-            const pos = positions[Math.floor(Math.random() * positions.length)];
-            const ovr = 70 + Math.floor(Math.random() * 18);
-            
-            state.market.push({
-                name: names[Math.floor(Math.random() * names.length)],
-                pos: pos, ovr: ovr, val: ovr * 200000, from: randomCountry.name,
-                id: Utils.generateID()
-            });
-        }
+        return false;
     }
 };
 
-// === PARTIDA ===
-const Match = {
-    timer: null,
-    min: 0,
-    score: [0, 0],
-
-    setup: (tacticId) => {
-        if (state.energy < 15) return ui.notify("Energia insuficiente. Descansa!", "error");
-        
-        Match.score = [0, 0];
-        Match.min = 0;
-        
-        state.tactics = tacticId;
-        
-        ui.show('screen-match');
-        ui.hideModal('modal-tactics');
-        document.getElementById('match-feed-list').innerHTML = '';
-        document.getElementById('btn-finish-match').classList.add('hidden');
-        
-        const rival = state.currentRival;
-
-        document.getElementById('match-home-badge').src = state.team.logo;
-        document.getElementById('match-away-badge').src = rival.logo;
-        document.getElementById('score-home').innerText = Match.score[0];
-        document.getElementById('score-away').innerText = Match.score[1];
-
-        state.energy -= 15;
-        
-        Match.timer = setInterval(Match.loop, 70);
-    },
-
-    loop: () => {
-        Match.min++;
-        document.getElementById('match-timer').innerText = Match.min + "'";
-        
-        const ball = document.getElementById('ball');
-        ball.style.left = Math.random() * 90 + '%';
-        ball.style.top = Math.random() * 90 + '%';
-
-        let tacticBonus = 0;
-        if(state.mode === 'manager' && window.DB) {
-            const tac = DB.tactics.find(t => t.id === state.tactics);
-            if(tac) tacticBonus = tac.bonus / 100;
-        }
-
-        if (Math.random() < 0.035) {
-            const myChance = 0.5 + tacticBonus + ((state.morale - 50) / 200);
-            
-            if (Math.random() < myChance) {
-                Match.score[0]++;
-                Match.log(`GOL DO ${state.team.name.toUpperCase()}!`, 'goal');
-                state.morale = Math.min(100, state.morale + 2);
-                
-                // Atualiza estatísticas do jogador da carreira (simplificado)
-                if (state.mode === 'player' && state.player) {
-                    state.player.stats.goals = (state.player.stats.goals || 0) + 1;
-                }
-            } else {
-                Match.score[1]++;
-                Match.log("Golo do adversário...", 'bad');
-                state.morale = Math.max(0, state.morale - 2);
-            }
-            document.getElementById('score-home').innerText = Match.score[0];
-            document.getElementById('score-away').innerText = Match.score[1];
-        }
-
-        if (Match.min >= 90) Match.end();
-    },
-
-    end: () => {
-        clearInterval(Match.timer);
-        document.getElementById('btn-finish-match').classList.remove('hidden');
-    },
-
-    finish: () => {
-        if (Match.score[0] > Match.score[1]) {
-            state.team.pts += 3;
-            if(state.mode === 'manager') state.cash += 300000;
-            state.news = `Vitória contra o ${state.currentRival.name} por ${Match.score[0]}x${Match.score[1]}!`;
-        } else if (Match.score[0] === Match.score[1]) {
-            state.team.pts += 1;
-            if(state.mode === 'manager') state.cash += 100000;
-            state.news = `Empate sofrido contra o ${state.currentRival.name}.`;
-        } else {
-            state.news = `Derrota para o ${state.currentRival.name}. É preciso levantar a cabeça.`;
-        }
-        state.team.played++;
-        
-        Game.advanceWeek();
-        ui.show('screen-hub');
-        ui.updateAll();
-        ui.renderTab('league');
-    },
-
-    log: (msg, type) => {
-        const list = document.getElementById('match-feed-list');
-        const li = document.createElement('li');
-        li.innerText = `${Match.min}' ${msg}`;
-        if (type) li.classList.add(type);
-        list.prepend(li);
-    }
-};
-
-// === INTERFACE (UI) ===
-const ui = {
-    show: (id) => {
-        document.querySelectorAll('.screen').forEach(s => {
-            s.classList.remove('active'); s.classList.add('hidden');
-        });
-        const el = document.getElementById(id);
-        el.classList.remove('hidden');
-        setTimeout(() => el.classList.add('active'), 50);
-    },
-    
-    showModal: (id) => document.getElementById(id).classList.remove('hidden'),
-    hideModal: (id) => document.getElementById(id).classList.add('hidden'),
-
-    updateAll: () => {
-        if(!state.team) return;
-        const country = DB.countries.find(c => c.id === state.countryId);
-        const league = country.leagues.find(l => l.id === state.leagueId);
-
-        document.getElementById('ui-team-name').innerText = state.team.name;
-        document.getElementById('ui-badge').src = state.team.logo;
-        document.getElementById('ui-league-name').innerText = league.name;
-        
-        // Exibe a moeda correta e o valor formatado
-        document.getElementById('ui-cash').innerText = Utils.formatMoney(state.cash);
-        document.getElementById('ui-currency-symbol').innerText = Utils.getCurrencySymbol(state.currency);
-
-        document.getElementById('ui-energy').innerText = state.energy;
-        document.getElementById('ui-news').innerText = state.news;
-        
-        const rival = state.currentRival || { name: 'Aguardando Sorteio...', logo: '', power: 0 };
-        const vsAreaImg = document.querySelector('.vs-area img:nth-child(3)');
-        const vsAreaBadge = document.querySelector('.vs-area .badge');
-
-        if(vsAreaImg) vsAreaImg.src = rival.logo;
-        if(vsAreaBadge) vsAreaBadge.innerText = rival.name;
-    },
-
-    renderTab: (tab) => {
-        const container = document.getElementById('main-content');
-        container.innerHTML = ''; 
-
-        if (tab === 'home') {
-            const moraleColor = state.morale > 70 ? '#22c55e' : (state.morale < 40 ? '#ef4444' : '#fbbf24');
-            container.innerHTML = `
-                <div class="card highlight">
-                    <h3>ESTADO ATUAL (Jornada ${state.week})</h3>
-                    <div style="margin-top:10px;">
-                        <p>Moral da Equipa</p>
-                        <div style="background:#333; height:10px; border-radius:5px; margin-top:5px;">
-                            <div style="width:${state.morale}%; background:${moraleColor}; height:100%; border-radius:5px;"></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="card">
-                    <h3 style="color:#aaa">PRÓXIMO JOGO</h3>
-                    <div class="vs-area">
-                        <img src="${state.team.logo}" width="50">
-                        <span>VS</span>
-                        <img src="${state.currentRival.logo}" width="50">
-                    </div>
-                    <p style="text-align:center; font-weight:bold">${state.currentRival.name}</p>
-                </div>
-            `;
-        } else if (tab === 'club') {
-            if (state.mode === 'player') {
-                if(typeof PlayerMode !== 'undefined') PlayerMode.init();
-                else container.innerHTML = "Erro: Módulo Jogador não carregado.";
-            } else {
-                if(typeof ManagerMode !== 'undefined') ManagerMode.init();
-                else container.innerHTML = "Erro: Módulo Manager não carregado.";
-            }
-        } else if (tab === 'squad') {
-             // Roteia para o módulo Transfer para gerenciar o elenco completo
-            if(typeof TransferMode !== 'undefined') TransferMode.initSquadView();
-            else container.innerHTML = `<div class="card"><p>Erro: Módulo de Elenco não carregado.</p></div>`;
-            
-        } else if (tab === 'transfer' || tab === 'market') {
-            // Roteia para o módulo Transfer para gerenciar negociações e mercado
-             if(typeof TransferMode !== 'undefined') TransferMode.initMarketView();
-             else container.innerHTML = `<div class="card"><p>Erro: Módulo de Transferências não carregado.</p></div>`;
-
-        } else if (tab === 'training') {
-            // Roteia para o módulo Jogador para Treinamento (mesmo no Manager, se for focado no treino individual)
-             if(state.mode === 'player' && typeof PlayerMode !== 'undefined') PlayerMode.initTrainingView();
-             else container.innerHTML = `<div class="card"><p>Treinamento avançado disponível apenas para o modo Carreira Jogador.</p></div>`;
-            
-        } else if (tab === 'league') {
-            const country = DB.countries.find(c => c.id === state.countryId);
-            const league = country.leagues.find(l => l.id === state.leagueId);
-            const sorted = [...league.clubs].sort((a,b) => b.pts - a.pts);
-
-            sorted.forEach((club, i) => {
-                let style = club.name === state.team.name ? 'background: rgba(59,130,246,0.2); border: 1px solid #3b82f6;' : '';
-                container.innerHTML += `
-                    <div class="card small" style="${style}">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <div style="display:flex; align-items:center; gap:10px;">
-                                <strong>${i+1}º</strong>
-                                <img src="${club.logo}" width="20">
-                                <span>${club.name}</span>
-                            </div>
-                            <strong>${club.pts}</strong>
-                        </div>
-                    </div>
-                `;
-            });
-        }
-    },
-
-    showTacticsModal: () => {
-        const modal = document.getElementById('modal-tactics');
-        const list = document.getElementById('tactics-list');
-        list.innerHTML = '';
-        
-        DB.tactics.forEach(t => {
-            list.innerHTML += `
-                <div class="card clickable" onclick="Match.setup('${t.id}')">
-                    <h4>${t.name}</h4>
-                    <p style="font-size:0.8rem; color:#aaa">${t.desc}</p>
-                    <div style="margin-top:5px; font-size:0.8rem;">
-                        <span style="color:#4ade80">Bónus: ${t.bonus}%</span> | 
-                        <span style="color:#ef4444">Risco: ${t.risk}%</span>
-                    </div>
-                </div>
-            `;
-        });
-        ui.showModal('modal-tactics');
-    },
-
-    notify: (msg, type) => {
-        state.news = msg;
-        const newsEl = document.getElementById('ui-news');
-        if(newsEl) newsEl.innerText = msg;
-    }
-};
-
-// === UTILITÁRIOS ===
+// === UTILITÁRIOS (Expansão) ===
 const Utils = {
-    getCurrencySymbol: (code) => {
-        switch(code) {
-            case 'EUR': return '€';
-            case 'BRL': return 'R$';
-            case 'USD': return '$';
-            case 'GBP': return '£';
-            default: return 'C';
-        }
+    formatMoney: (amount) => {
+        const symbol = state.currency === 'EUR' ? '€' : '$';
+        return `${symbol} ${Math.round(amount).toLocaleString('pt-PT')}`;
     },
+    generateID: () => '_' + Math.random().toString(36).substr(2, 9),
     
-    toggleCurrency: () => {
-        state.currency = (state.currency === 'EUR' ? 'BRL' : (state.currency === 'BRL' ? 'USD' : 'EUR'));
-        document.getElementById('action-currency').innerText = `MUDAR MOEDA (${state.currency})`;
-        ui.updateAll();
-        SaveSystem.save();
-    },
-    
-    formatMoney: (val) => {
-        const code = state.currency;
-        // Usa Intl.NumberFormat para formatação profissional
-        try {
-            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: code, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val);
-        } catch (e) {
-            // Fallback para símbolos simples
-            return Utils.getCurrencySymbol(code) + val.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-        }
-    },
-
-    pickNextRival: () => {
-        if (!state.team) return; 
-
-        const country = DB.countries.find(c => c.id === state.countryId);
-        const league = country.leagues.find(l => l.id === state.leagueId);
+    // Novo: Gerador de jogadores com ênfase em atributos
+    generatePlayer: (clubPower, pos, isMe = false, name = null) => {
+        const countryId = state.countryId || 'en';
+        const names = DB.names[countryId] || DB.names.en;
+        const ovr = Math.max(50, clubPower - 15 + Math.floor(Math.random() * 20));
+        const baseVal = ovr * 100000;
+        const age = isMe ? 20 : random(17, 34);
+        const potential = ovr + random(0, 15);
         
-        const rivals = league.clubs.filter(c => c.name !== state.team.name);
+        return {
+            id: Utils.generateID(),
+            name: name || names[Math.floor(Math.random() * names.length)] + ' ' + names[Math.floor(Math.random() * names.length)],
+            pos: pos, 
+            ovr: ovr, 
+            val: baseVal, 
+            isGenerated: !isMe, 
+            age: age,
+            potential: potential, 
+            energy: 100,         
+            morale: 100,         
+            injured: false,      
+            injuryWeeks: 0,      
+            stats: { goals: 0, assists: 0, cards: 0 },
+            isMe: isMe,
+            salary: parseInt(baseVal * 0.01 / 5000) * 5000, 
+        };
+    },
+};
+
+// Função de Randomização
+const random = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+
+// === MÓDULO DE GERAÇÃO DE LIGA/CLUBES ===
+const GameUtils = {
+    // Inicializa o elenco para o clube
+    getSquadForClub: (club, countryId) => {
+        const squad = [];
+        // NOTA: É necessário que o arquivo database_Jo.js seja carregado ANTES
+        const isRealPlayer = (typeof RealPlayers !== 'undefined') ? RealPlayers[club.name] : null; 
         
-        if (rivals.length > 0) {
-            const randomIndex = Math.floor(Math.random() * rivals.length);
-            state.currentRival = rivals[randomIndex];
-        } else {
-            state.currentRival = { name: "Adversário Genérico", logo: "", power: 70 };
-        }
-        ui.updateAll();
-    },
-
-    generateID: () => {
-        return Math.random().toString(36).substring(2, 9);
-    },
-    
-    // Geração de Atributos Iniciais para o jogador da carreira
-    getInitialPlayerAttributes: (pos) => {
-        const baseAttrs = { finishing: 60, passing: 60, tackling: 60, speed: 65, stamina: 65, handling: 40 };
-        const initialRating = 72; // OVR de um jovem promissor
-        const boost = (initialRating - 60) * 1.5; // Ajusta o boost baseado no OVR inicial
-
-        if (pos === 'ATT') baseAttrs.finishing += boost;
-        else if (pos === 'MID') baseAttrs.passing += boost;
-        else if (pos === 'DEF') baseAttrs.tackling += boost;
-        else if (pos === 'GK') baseAttrs.handling += boost;
-
-        return baseAttrs;
-    },
-    
-    // Geração de elenco híbrido para times da IA
-    generateSquad: (club, countryId) => {
-        let squad = [];
-        if (typeof RealPlayers !== 'undefined' && RealPlayers[club.name]) {
-            squad = JSON.parse(JSON.stringify(RealPlayers[club.name]));
-            squad.forEach(p => { 
-                p.id = Utils.generateID(); // Garante ID único
-                if(!p.val) p.val = p.ovr * 150000; 
-                // Inicializa stats se estiverem faltando (para jogadores reais)
-                if(!p.stats) p.stats = { goals: 0, assists: 0, cards: 0 };
+        if (isRealPlayer) {
+            isRealPlayer.forEach(p => {
+                const newPlayer = Utils.generatePlayer(club.power, p.pos, false, p.name);
+                newPlayer.ovr = p.ovr; // Usa OVR real
+                newPlayer.val = newPlayer.ovr * 150000; // Recalcula valor
+                newPlayer.salary = parseInt(newPlayer.val * 0.01 / 5000) * 5000;
+                squad.push(newPlayer);
             });
         }
-        const minPlayers = 15;
+        
+        const minPlayers = 22; 
         if (squad.length < minPlayers) {
             const needed = minPlayers - squad.length;
-            const names = DB.names[countryId] || DB.names.en;
-            const positions = ['GK', 'DEF', 'MID', 'ATT'];
+            const positions = ['GK', 'DEF', 'DEF', 'LAT', 'MID', 'MID', 'ATT', 'ATT'];
             for(let i=0; i < needed; i++) {
                 const pos = positions[Math.floor(Math.random() * positions.length)];
-                const ovr = Math.max(55, club.power - 10 + Math.floor(Math.random() * 10));
-                squad.push({
-                    id: Utils.generateID(),
-                    name: names[Math.floor(Math.random() * names.length)],
-                    pos: pos, ovr: ovr, val: ovr * 100000, isGenerated: true, age: 25,
-                    stats: { goals: 0, assists: 0, cards: 0 }
-                });
+                squad.push(Utils.generatePlayer(club.power, pos));
             }
         }
+        
+        club.cash = club.budget;
+        club.points = 0; // Novo: Tabela de pontos
+        
         return squad;
     },
     
-    triggerEvent: () => {
-        const modal = document.getElementById('modal-event');
-        document.getElementById('evt-title').innerText = "Notícia";
-        document.getElementById('evt-desc').innerText = "A direção está satisfeita com o teu trabalho.";
-        ui.showModal('modal-event');
+    // Novo: Lógica de simulação de partida
+    simulateMatch: (clubA, clubB) => {
+        // OVR médio é agora dinâmico (apenas jogadores aptos)
+        const getOVR = (club) => {
+            const aptSquad = club.squad.filter(p => !p.injured && p.energy > 50).slice(0, 11);
+            if (aptSquad.length < 7) return club.club.power * 0.7; // Penalidade por falta de jogadores
+            return aptSquad.reduce((sum, p) => sum + p.ovr, 0) / aptSquad.length;
+        };
+        
+        const ovrA = getOVR(clubA);
+        const ovrB = clubB.club.power; // OVR do clube CPU é simplificado
+        
+        let scoreA = 0;
+        let scoreB = 0;
+        const diff = ovrA - ovrB;
+        
+        // Geração de gols probabilística
+        const baseGoals = random(1, 4); 
+        for (let i = 0; i < baseGoals; i++) {
+            // Chance de gol aumenta com OVR (ajuste para 50% + diferença)
+            if (random(0, 100) < 50 + diff * 1.5) { 
+                scoreA++;
+            } else {
+                scoreB++;
+            }
+        }
+        
+        return { scoreA, scoreB };
+    },
+};
+
+
+// === LÓGICA DO AVANÇO DE SEMANA (CORE DO JOGO) ===
+const GameLoop = {
+    // Melhoria: Centraliza toda a lógica semanal
+    advanceWeek: () => {
+        state.week++;
+        
+        // 1. Pagar Salários e Manutenção
+        const totalWages = ManagerMode.calculateWages();
+        const maintenance = state.upgrades.stadium * 50000;
+        const totalExpenses = totalWages + maintenance;
+        state.cash -= totalExpenses;
+        
+        ui.notify(`💸 Despesas Semanais: -${Utils.formatMoney(totalExpenses)}. Salário e manutenção pagos.`, "info");
+        
+        // 2. Simular Partida e Receita
+        const rival = { club: ManagerMode.getCompetitor(), name: "Rival Aleatório" }; 
+        const { scoreA, scoreB } = GameUtils.simulateMatch(state.team, rival);
+        
+        state.lastMatchResult = { scoreA, scoreB, rival: rival.club.name };
+
+        let matchRevenue = state.upgrades.stadium * 100000; 
+        
+        if (scoreA > scoreB) {
+            state.team.points += 3;
+            matchRevenue *= 1.5; 
+            ui.notify(`🏆 Vitória! ${scoreA} x ${scoreB} contra ${rival.club.name}. +3 pontos.`, "success");
+        } else if (scoreA === scoreB) {
+            state.team.points += 1;
+            ui.notify(`🤝 Empate. ${scoreA} x ${scoreB} contra ${rival.club.name}. +1 ponto.`, "info");
+        } else {
+            ui.notify(`😞 Derrota. ${scoreA} x ${scoreB} contra ${rival.club.name}.`, "danger");
+        }
+        
+        state.cash += matchRevenue;
+        ui.notify(`💰 Receita do Dia do Jogo: +${Utils.formatMoney(matchRevenue)}.`, "success");
+
+        // 3. Atualizar Jogadores e Lesões (Decaimento e Recuperação)
+        state.team.squad.forEach(p => {
+            if (p.injured) {
+                p.injuryWeeks -= 1;
+                if (p.injuryWeeks <= 0) {
+                    p.injured = false;
+                    ui.notify(`✅ ${p.name} se recuperou da lesão!`, "info");
+                }
+            } else {
+                // Recuperação de energia baseada no nível médico
+                const recoveryRate = 10 + (state.upgrades.medical * 5); 
+                p.energy = Math.min(100, p.energy + recoveryRate);
+                
+                // Pequeno decaimento de moral e potencial por idade
+                p.morale = Math.max(50, p.morale - 1); 
+                if (p.age > 30 && p.ovr > p.potential) p.ovr = Math.max(50, p.ovr - 1); // Atletas velhos caem de nível
+            }
+        });
+        
+        // 4. Resetar mercado
+        state.market = [];
+        ManagerMode.generateMarket();
+        
+        // 5. Atualiza a UI
+        ManagerMode.init('clube'); // Retorna para a aba principal
+        SaveSystem.save();
+    },
+};
+
+// === INTERFACE DO USUÁRIO (UI) ===
+const ui = {
+    showScreen: (screenId) => {
+        document.querySelectorAll('.screen').forEach(screen => {
+            screen.classList.remove('active');
+        });
+        document.getElementById(screenId).classList.add('active');
+        
+        // Atualiza cabeçalho e rodapé quando entra no jogo
+        if (screenId === 'screen-game') {
+            ui.updateHeader();
+            // Inicia a renderização do Manager na aba Clube
+            if (state.mode === 'manager') ManagerMode.init('clube');
+            else if (state.mode === 'player') PlayerMode.init(); 
+        }
+        
+        // Renderiza a lista de países na seleção inicial
+        if (screenId === 'screen-select-club') {
+            ui.renderCountryList();
+        }
+    },
+    
+    // Novo: Atualização em tempo real do cabeçalho
+    updateHeader: () => {
+        const teamHeader = document.getElementById('team-header');
+        const statusCash = document.getElementById('status-cash');
+        const statusWeek = document.getElementById('status-week');
+
+        if (state.team && state.team.club) {
+            teamHeader.innerHTML = `
+                <img src="${state.team.club.logo}" class="club-logo-header" onerror="this.src='icons/default_logo.png'"/>
+                <div class="header-titles">
+                    <h4 style="margin:0">${state.team.club.name}</h4>
+                    <p style="margin:0; font-size:0.7rem; color:var(--text-muted)">${state.team.club.leagueName}</p>
+                </div>
+            `;
+        } else if (state.player) {
+             teamHeader.innerHTML = `<h4 style="margin:0">Carreira de Jogador</h4>`;
+        }
+        
+        statusCash.textContent = `💰 ${Utils.formatMoney(state.cash)}`;
+        statusWeek.textContent = `📅 Semana ${state.week}`;
+    },
+    
+    // Sistema de Notificação
+    notify: (message, type = 'info') => {
+        const notification = document.getElementById('notification-area');
+        const alert = document.createElement('div');
+        alert.className = `alert alert-${type}`;
+        alert.textContent = message;
+        notification.appendChild(alert);
+        
+        setTimeout(() => {
+            alert.classList.add('fade-out');
+            alert.addEventListener('transitionend', () => alert.remove());
+        }, 4000);
+    },
+    
+    // Gerenciamento de Modais
+    showModal: (modalId) => {
+        document.getElementById(modalId).classList.remove('hidden');
+    },
+    hideModal: (modalId) => {
+        document.getElementById(modalId).classList.add('hidden');
+    },
+    
+    // Novo: Renderiza lista de países para seleção
+    renderCountryList: () => {
+        const list = document.getElementById('country-list');
+        list.innerHTML = DB.countries.map(country => `
+            <div class="country-card" onclick="ui.selectCountry('${country.id}')">
+                <span class="material-icons">${country.id === 'br' ? 'flag_circle' : 'public'}</span>
+                <h3>${country.name}</h3>
+            </div>
+        `).join('');
+    },
+    
+    // Novo: Seleciona País e mostra Ligas
+    selectCountry: (countryId) => {
+        state.countryId = countryId;
+        const country = DB.countries.find(c => c.id === countryId);
+        
+        const leagueList = document.getElementById('league-list');
+        leagueList.innerHTML = country.leagues.map(league => `
+            <div class="league-card" onclick="ui.selectLeague('${league.id}')">
+                <h3>${league.name}</h3>
+                <p>Tier ${league.tier}</p>
+            </div>
+        `).join('');
+        
+        document.getElementById('country-list').style.display = 'none';
+        document.getElementById('league-title').style.display = 'block';
+        leagueList.style.display = 'grid';
+        
+        document.getElementById('club-title').style.display = 'none';
+        document.getElementById('club-list').style.display = 'none';
+        document.getElementById('btn-start-manager').style.display = 'none';
+    },
+
+    // Novo: Seleciona Liga e mostra Clubes
+    selectLeague: (leagueId) => {
+        state.leagueId = leagueId;
+        const league = DB.countries.find(c => c.id === state.countryId).leagues.find(l => l.id === leagueId);
+        
+        const clubList = document.getElementById('club-list');
+        clubList.innerHTML = league.clubs.map(club => `
+            <div class="club-card" onclick="ui.selectClub('${club.name}')">
+                <img src="${club.logo}" alt="${club.name} Logo" onerror="this.src='icons/default_logo.png'"/>
+                <h3>${club.name}</h3>
+                <p>OVR: ${club.power}</p>
+                <p>Estádio: ${club.stadium.toLocaleString('pt-PT')}</p>
+            </div>
+        `).join('');
+        
+        document.getElementById('league-list').style.display = 'none';
+        document.getElementById('club-title').style.display = 'block';
+        clubList.style.display = 'grid';
+    },
+
+    // Novo: Seleciona Clube (apenas para exibir botão Iniciar)
+    selectClub: (clubName) => {
+        const league = DB.countries.find(c => c.id === state.countryId).leagues.find(l => l.id === state.leagueId);
+        const club = league.clubs.find(c => c.name === clubName);
+        
+        // Define o clube no estado (temporariamente)
+        state.team = { club: club, league: league, squad: [], points: 0 }; 
+        
+        document.querySelectorAll('.club-card').forEach(card => card.classList.remove('active'));
+        document.querySelector(`.club-card h3:contains("${clubName}")`).closest('.club-card').classList.add('active');
+
+        document.getElementById('btn-start-manager').style.display = 'block';
     }
 };
+
+// Polifill/Helper para :contains (usado no selectClub)
+if (!Element.prototype.matches) {
+    Element.prototype.matches = Element.prototype.msMatchesSelector || Element.prototype.webkitMatchesSelector;
+}
+Element.prototype.closest = function(selector) {
+    var el = this;
+    while (el && el.nodeType === 1) {
+        if (el.matches(selector)) {
+            return el;
+        }
+        el = el.parentNode;
+    }
+    return null;
+};
+// Simples helper para o seletor :contains
+NodeList.prototype.forEach = Array.prototype.forEach;
+// Adiciona um método 'contains' simplificado para strings (apenas para o seletor acima)
+Element.prototype.contains = function(str) {
+    return this.textContent.includes(str);
+};
+
+// Inicialização principal
+window.onload = () => {
+    // Tenta carregar o jogo
+    if (!SaveSystem.load()) {
+        ui.showScreen('screen-menu');
+    }
+};
+
+// NOTA: O arquivo manager.js (enviado na resposta anterior) contém a lógica ManagerMode.handleStartGame()
